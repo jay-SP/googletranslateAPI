@@ -10,41 +10,56 @@ import (
 	"github.com/jay/go-translate/cli"
 )
 
-var wg sync.WaitGroup
-
-var sourceLanguage string
-var targetLanguage string
-var sourceText string
+var (
+	sourceLanguage string
+	targetLanguage string
+	sourceText     string
+)
 
 func init() {
-	flag.StringVar(&sourceLanguage, "s", "en", "Source language[en]")
-	flag.StringVar(&targetLanguage, "t", "fr", "Target Language")
+	flag.StringVar(&sourceLanguage, "s", "en", "Source language (default: en)")
+	flag.StringVar(&targetLanguage, "t", "fr", "Target language (default: fr)")
 	flag.StringVar(&sourceText, "st", "", "Text to translate")
 }
 
 func main() {
 	flag.Parse()
 
-	if flag.NFlag() == 0 {
-		fmt.Println("Options: 	")
+	if sourceText == "" {
+		fmt.Println("Error: Text to translate is required")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
+	translatedText, err := translateText(sourceLanguage, targetLanguage, sourceText)
+	if err != nil {
+		fmt.Printf("Error translating text: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println(processTranslation(translatedText))
+}
+
+func translateText(sourceLang, targetLang, text string) (string, error) {
+	var wg sync.WaitGroup
 	strChan := make(chan string)
 
 	wg.Add(1)
+	defer wg.Wait()
+	defer close(strChan)
 
 	reqBody := &cli.RequestBody{
-		SourceLang: sourceLanguage,
-		TargetLang: targetLanguage,
-		SourceText: sourceText,
+		SourceLang: sourceLang,
+		TargetLang: targetLang,
+		SourceText: text,
 	}
 
 	go cli.RequestTranslate(reqBody, strChan, &wg)
-	processedStr := strings.ReplaceAll(<-strChan, "+", " ")
 
-	fmt.Printf("%s\n", processedStr)
-	wg.Wait()
+	// Wait for the translation to complete
+	return <-strChan, nil
+}
 
+func processTranslation(text string) string {
+	return strings.ReplaceAll(text, "+", " ")
 }
